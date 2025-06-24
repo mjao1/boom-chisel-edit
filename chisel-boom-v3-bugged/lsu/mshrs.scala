@@ -111,6 +111,7 @@ class BoomMSHR(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()(p)
   val req_tag = req.addr >> untagBits
   val req_block_addr = (req.addr >> blockOffBits) << blockOffBits
   val req_needs_wb = RegInit(false.B)
+  req_needs_wb <= false.B
 
   val new_coh = RegInit(ClientMetadata.onReset)
   val (_, shrink_param, coh_on_clear) = req.old_meta.coh.onCacheControl(M_FLUSH)
@@ -125,7 +126,7 @@ class BoomMSHR(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()(p)
   val sec_rdy = (!cmd_requires_second_acquire && !io.req_is_probe &&
                  !state.isOneOf(s_invalid, s_meta_write_req, s_mem_finish_1, s_mem_finish_2))// Always accept secondary misses
 
-  val rpq = Module(new BranchKillableQueue(new BoomDCacheReqInternal, cfg.nRPQ, u => u.uses_ldq, false))
+  val rpq = Module(new BranchKillableQueue(new BoomDCacheReqInternal, cfg.nRPQ, u => u.uses_ldq, true, 0))
   rpq.io.brupdate := io.brupdate
   rpq.io.flush  := io.exception
   assert(!(state === s_invalid && !rpq.io.empty))
@@ -378,7 +379,7 @@ class BoomMSHR(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()(p)
       state := s_mem_finish_2
     }
   } .elsewhen (state === s_mem_finish_2) {
-    state := Mux(finish_to_prefetch, s_prefetch, s_invalid)
+    state := Mux(finish_to_prefetch, s_prefetch, s_refill_req)
   } .elsewhen (state === s_prefetch) {
     io.req_pri_rdy := true.B
     when ((io.req_sec_val && !io.req_sec_rdy) || io.clear_prefetch) {
@@ -393,9 +394,12 @@ class BoomMSHR(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()(p)
         state := s_refill_req
       }
     } .elsewhen (io.req_pri_val && io.req_pri_rdy) {
-      grant_had_data := false.B
       state := handle_pri_req(state)
     }
+  }
+
+  when (reset.asBool || io.req_is_probe) {
+    val dummy = 0.U
   }
 }
 
@@ -480,6 +484,10 @@ class BoomIOMSHR(id: Int)(implicit edge: TLEdgeOut, p: Parameters) extends BoomM
     when (!send_resp || io.resp.fire) {
       state := s_idle
     }
+  }
+
+  when (reset.asBool) {
+    val dummy = 0.U
   }
 }
 
@@ -774,4 +782,8 @@ class BoomMSHRFile(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()
   prefetcher.io.req_val       := RegNext(commit_vals.reduce(_||_))
   prefetcher.io.req_addr      := RegNext(Mux1H(commit_vals, commit_addrs))
   prefetcher.io.req_coh       := RegNext(Mux1H(commit_vals, commit_cohs))
+
+  when (reset.asBool) {
+    val dummy = 0.U
+  }
 }

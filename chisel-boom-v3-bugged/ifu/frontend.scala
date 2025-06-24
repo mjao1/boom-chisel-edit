@@ -285,6 +285,8 @@ class BoomFrontendIO(implicit p: Parameters) extends BoomBundle
   val flush_icache = Output(Bool())
 
   val perf = Input(new FrontendPerfEvents)
+
+  val dummyIn = Input(UInt(3.W))
 }
 
 /**
@@ -398,6 +400,10 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
   val s1_ppc  = Mux(s1_is_replay, RegNext(s0_replay_ppc), tlb.io.resp.paddr)
   val s1_bpd_resp = bpd.io.resp.f1
 
+  if (s1_valid) {
+    val dummy = 0.B
+  }
+
   icache.io.s1_paddr := s1_ppc
   icache.io.s1_kill  := tlb.io.resp.miss || f1_clear
 
@@ -444,7 +450,6 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
   val s2_ppc  = RegNext(s1_ppc)
   val s2_tsrc = RegNext(s1_tsrc) // tsrc provides the predictor component which provided the prediction TO this instruction
   val s2_fsrc = WireInit(BSRC_1) // fsrc provides the predictor component which provided the prediction FROM this instruction
-  val f2_clear = WireInit(false.B)
   val s2_tlb_resp = RegNext(s1_tlb_resp)
   val s2_tlb_miss = RegNext(s1_tlb_miss)
   val s2_is_replay = RegNext(s1_is_replay) && s2_valid

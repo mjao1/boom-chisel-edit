@@ -61,6 +61,7 @@ class RegisterRead(
 
     val kill   = Input(Bool())
     val brupdate = Input(new BrUpdateInfo())
+    val dummyOut = Output(UInt(4.W))
   })
 
   val rrd_valids       = Wire(Vec(issueWidth, Bool()))

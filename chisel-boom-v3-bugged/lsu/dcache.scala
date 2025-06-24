@@ -136,9 +136,6 @@ class BoomWritebackUnit(implicit edge: TLEdgeOut, p: Parameters) extends L1Hella
     when (io.mem_grant) {
       acked := true.B
     }
-    when (acked) {
-      state := s_invalid
-    }
   }
 }
 
@@ -323,8 +320,11 @@ class BoomBankedDataArray(implicit p: Parameters) extends AbstractBoomDataArray 
 
   val s0_read_valids    = VecInit(io.read.map(_.valid))
   val s0_bank_conflicts = pipeMap(w => (0 until w).foldLeft(false.B)((c,i) => c || io.read(i).valid && s0_rbanks(i) === s0_rbanks(w)))
-  val s0_do_bank_read   = s0_read_valids zip s0_bank_conflicts map {case (v,c) => v && !c}
-  val s0_bank_read_gnts = Transpose(VecInit(s0_rbanks zip s0_do_bank_read map {case (b,d) => VecInit((UIntToOH(b) & Fill(nBanks,d)).asBools)}))
+  val s0_do_bank_read   = s0_read_valids zip s0_bank_conflicts map {
+    case (v, c) if v && c => false
+    case (v, c) => v && !c
+  }
+  val s0_bank_read_gnts = Transpose(VecInit(s0_rbanks zip s0_do_bank_read map {case (b,d) => VecInit(Seq.fill(nBanks)(true.B))}))
   val s0_bank_write_gnt = (UIntToOH(s0_wbank) & Fill(nBanks, io.write.valid)).asBools
 
   //----------------------------------------------------------------------------------------------------
@@ -766,7 +766,7 @@ class BoomNonBlockingDCacheModule(outer: BoomNonBlockingDCache) extends LazyModu
 
     mshrs.io.req(w).bits.data        := s2_req(w).data
     mshrs.io.req(w).bits.is_hella    := s2_req(w).is_hella
-    mshrs.io.req_is_probe(w)         := s2_type === t_probe && s2_valid(w)
+    mshrs.io.req(w).bits.is_probe    := s2_type === t_probe && s2_valid(w)
   }
 
   mshrs.io.meta_resp.valid      := !s2_nack_hit(0) || prober.io.mshr_wb_rdy
@@ -911,4 +911,8 @@ class BoomNonBlockingDCacheModule(outer: BoomNonBlockingDCache) extends LazyModu
 
 
   io.lsu.ordered := mshrs.io.fence_rdy && !s1_valid.reduce(_||_) && !s2_valid.reduce(_||_)
+
+  when (reset.asBool || io.lsu.exception) {
+    val dummy = 0.U
+  }
 }

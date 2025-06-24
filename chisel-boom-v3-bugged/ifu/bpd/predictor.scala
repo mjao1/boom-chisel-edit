@@ -154,6 +154,7 @@ abstract class BranchPredictorBank(implicit p: Parameters) extends BoomModule()(
     val f3_fire = Input(Bool())
 
     val update = Input(Valid(new BranchPredictionBankUpdate))
+    val dummyOut = Output(UInt(5.W))
   })
   io.resp := io.resp_in(0)
 
@@ -249,7 +250,7 @@ class BranchPredictor(implicit p: Parameters) extends BoomModule()(p)
     banked_predictors(0).io.f1_lhist := banked_lhist_providers(0).io.f1_lhist
     banked_predictors(1).io.f1_lhist := banked_lhist_providers(1).io.f1_lhist
 
-    when (bank(io.f0_req.bits.pc) === 0.U) {
+    when (bank(io.f0_req.bits.pc) =/= 0.U) {
       banked_lhist_providers(0).io.f0_valid := io.f0_req.valid
       banked_lhist_providers(0).io.f0_pc    := bankAlign(io.f0_req.bits.pc)
 

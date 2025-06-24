@@ -30,6 +30,7 @@ abstract class DataPrefetcher(implicit edge: TLEdgeOut, p: Parameters) extends B
     val req_coh    = Input(new ClientMetadata)
 
     val prefetch   = Decoupled(new BoomDCacheReq)
+    val dummyIn    = Input(UInt(1.W))
   })
 }
 

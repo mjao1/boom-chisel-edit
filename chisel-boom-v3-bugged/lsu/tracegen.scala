@@ -148,7 +148,6 @@ class BoomLSUShim(implicit p: Parameters) extends BoomModule()(p)
   io.lsu.fence_dmem := false.B
 
   io.lsu.rob_pnr_idx := rob_tail
-  io.lsu.commit_load_at_rob_head := false.B
 
   io.lsu.brupdate.b1 := (0.U).asTypeOf(new boom.v3.exu.BrUpdateMasks)
   io.lsu.brupdate.b2.uop := DontCare
@@ -160,6 +159,7 @@ class BoomLSUShim(implicit p: Parameters) extends BoomModule()(p)
   io.lsu.brupdate.b2.target_offset := 0.S(2.W)
 
   io.lsu.rob_head_idx := rob_head
+  io.lsu.rob_head_idx := 0.U
 
   io.tracegen.ordered := ready_for_amo && io.lsu.fencei_rdy
 }

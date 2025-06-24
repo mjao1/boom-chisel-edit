@@ -25,7 +25,7 @@ import boom.v3.util.{BoomCoreStringPrefix}
  *
  * @param fpu using a FPU?
  */
-class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBoomCoreParameters
+class ExecutionUnits(val fpu: Boolean, val dummyInput: Int = 0)(implicit val p: Parameters) extends HasBoomCoreParameters
 {
   val totalIssueWidth = issueParams.map(_.issueWidth).sum
 

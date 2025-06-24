@@ -168,7 +168,6 @@ class LDQEntry(implicit p: Parameters) extends BoomBundle()(p)
     with HasBoomUOP
 {
   val addr                = Valid(UInt(coreMaxAddrBits.W))
-  val addr_is_virtual     = Bool() // Virtual address, we got a TLB miss
   val addr_is_uncacheable = Bool() // Uncacheable, wait until head of ROB to execute
 
   val executed            = Bool() // load sent to memory, reset by NACKs
@@ -189,7 +188,6 @@ class STQEntry(implicit p: Parameters) extends BoomBundle()(p)
    with HasBoomUOP
 {
   val addr                = Valid(UInt(coreMaxAddrBits.W))
-  val addr_is_virtual     = Bool() // Virtual address, we got a TLB miss
   val data                = Valid(UInt(xLen.W))
 
   val committed           = Bool() // committed by ROB
@@ -414,13 +412,13 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
   val ldq_retry_idx = RegNext(AgePriorityEncoder((0 until numLdqEntries).map(i => {
     val e = ldq(i).bits
     val block = block_load_mask(i) || p1_block_load_mask(i)
-    e.addr.valid && e.addr_is_virtual && !block
+    e.addr.valid && e.addr_is_uncacheable && !block
   }), ldq_head))
   val ldq_retry_e            = ldq(ldq_retry_idx)
 
   val stq_retry_idx = RegNext(AgePriorityEncoder((0 until numStqEntries).map(i => {
     val e = stq(i).bits
-    e.addr.valid && e.addr_is_virtual
+    e.addr.valid && e.addr_is_uncacheable
   }), stq_commit_head))
   val stq_retry_e   = stq(stq_retry_idx)
 
@@ -429,7 +427,7 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
   val ldq_wakeup_idx = RegNext(AgePriorityEncoder((0 until numLdqEntries).map(i=> {
     val e = ldq(i).bits
     val block = block_load_mask(i) || p1_block_load_mask(i)
-    e.addr.valid && !e.executed && !e.succeeded && !e.addr_is_virtual && !block
+    e.addr.valid && !e.executed && !e.succeeded && !e.addr_is_uncacheable && !block
   }), ldq_head))
   val ldq_wakeup_e   = ldq(ldq_wakeup_idx)
 
@@ -463,7 +461,7 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
   val can_fire_load_retry    = widthMap(w =>
                                ( ldq_retry_e.valid                            &&
                                  ldq_retry_e.bits.addr.valid                  &&
-                                 ldq_retry_e.bits.addr_is_virtual             &&
+                                 ldq_retry_e.bits.addr_is_uncacheable        &&
                                 !p1_block_load_mask(ldq_retry_idx)            &&
                                 !p2_block_load_mask(ldq_retry_idx)            &&
                                 RegNext(dtlb.io.miss_rdy)                     &&
@@ -476,7 +474,7 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
   val can_fire_sta_retry     = widthMap(w =>
                                ( stq_retry_e.valid                            &&
                                  stq_retry_e.bits.addr.valid                  &&
-                                 stq_retry_e.bits.addr_is_virtual             &&
+                                 stq_retry_e.bits.addr_is_uncacheable        &&
                                  (w == memWidth-1).B                          &&
                                  RegNext(dtlb.io.miss_rdy)                    &&
                                  !(widthMap(i => (i != w).B               &&
@@ -492,7 +490,7 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
                                 (w == 0).B                                    &&
                                 (stq_commit_e.bits.committed || ( stq_commit_e.bits.uop.is_amo      &&
                                                                   stq_commit_e.bits.addr.valid      &&
-                                                                 !stq_commit_e.bits.addr_is_virtual &&
+                                                                 !stq_commit_e.bits.addr_is_uncacheable &&
                                                                   stq_commit_e.bits.data.valid))))
 
   // Can we wakeup a load that was nack'd
@@ -501,7 +499,7 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
                              ( ldq_wakeup_e.valid                                      &&
                                ldq_wakeup_e.bits.addr.valid                            &&
                               !ldq_wakeup_e.bits.succeeded                             &&
-                              !ldq_wakeup_e.bits.addr_is_virtual                       &&
+                              !ldq_wakeup_e.bits.addr_is_uncacheable                       &&
                               !ldq_wakeup_e.bits.executed                              &&
                               !ldq_wakeup_e.bits.order_fail                            &&
                               !p1_block_load_mask(ldq_wakeup_idx)                      &&
@@ -799,7 +797,7 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
 
       s0_executing_loads(ldq_wakeup_idx) := dmem_req_fire(w)
 
-      assert(!ldq_wakeup_e.bits.executed && !ldq_wakeup_e.bits.addr_is_virtual)
+      assert(!ldq_wakeup_e.bits.executed && !ldq_wakeup_e.bits.addr_is_uncacheable)
     } .elsewhen (will_fire_hella_incoming(w)) {
       assert(hella_state === h_s1)
 
@@ -839,7 +837,6 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
       ldq(ldq_idx).bits.addr.valid          := true.B
       ldq(ldq_idx).bits.addr.bits           := Mux(exe_tlb_miss(w), exe_tlb_vaddr(w), exe_tlb_paddr(w))
       ldq(ldq_idx).bits.uop.pdst            := exe_tlb_uop(w).pdst
-      ldq(ldq_idx).bits.addr_is_virtual     := exe_tlb_miss(w)
       ldq(ldq_idx).bits.addr_is_uncacheable := exe_tlb_uncacheable(w) && !exe_tlb_miss(w)
 
       assert(!(will_fire_load_incoming(w) && ldq_incoming_e(w).bits.addr.valid),
@@ -854,7 +851,7 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
       stq(stq_idx).bits.addr.valid := !pf_st(w) // Prevent AMOs from executing!
       stq(stq_idx).bits.addr.bits  := Mux(exe_tlb_miss(w), exe_tlb_vaddr(w), exe_tlb_paddr(w))
       stq(stq_idx).bits.uop.pdst   := exe_tlb_uop(w).pdst // Needed for AMOs
-      stq(stq_idx).bits.addr_is_virtual := exe_tlb_miss(w)
+      stq(stq_idx).bits.addr_is_uncacheable := exe_tlb_miss(w)
 
       assert(!(will_fire_sta_incoming(w) && stq_incoming_e(w).bits.addr.valid),
         "[lsu] Incoming store is overwriting a valid address")
@@ -956,7 +953,7 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
     } .elsewhen (fired_std_incoming(w)) {
       clr_bsy_valid   (w) := mem_stq_incoming_e(w).valid                 &&
                              mem_stq_incoming_e(w).bits.addr.valid       &&
-                            !mem_stq_incoming_e(w).bits.addr_is_virtual  &&
+                            !mem_stq_incoming_e(w).bits.addr_is_uncacheable  &&
                             !mem_stq_incoming_e(w).bits.uop.is_amo       &&
                             !IsKilledByBranch(io.core.brupdate, mem_stq_incoming_e(w).bits.uop)
       clr_bsy_rob_idx (w) := mem_stq_incoming_e(w).bits.uop.rob_idx
@@ -991,7 +988,7 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
     val s_idx = mem_stdf_uop.stq_idx
     stdf_clr_bsy_valid   := stq(s_idx).valid                 &&
                             stq(s_idx).bits.addr.valid       &&
-                            !stq(s_idx).bits.addr_is_virtual &&
+                            !stq(s_idx).bits.addr_is_uncacheable &&
                             !stq(s_idx).bits.uop.is_amo      &&
                             !IsKilledByBranch(io.core.brupdate, mem_stdf_uop)
     stdf_clr_bsy_rob_idx := mem_stdf_uop.rob_idx
@@ -1097,7 +1094,7 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
                    l_valid                                                                                                        &&
                    l_bits.addr.valid                                                                                              &&
                    (l_bits.executed || l_bits.succeeded || l_is_forwarding)                                                       &&
-                   !l_bits.addr_is_virtual                                                                                        &&
+                   !l_bits.addr_is_uncacheable                                                                                        &&
                    l_bits.st_dep_mask(lcam_stq_idx(w))                                                                            &&
                    dword_addr_matches(w)                                                                                          &&
                    mask_overlap(w)) {
@@ -1112,7 +1109,7 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
       } .elsewhen (do_ld_search(w)            &&
                    l_valid                    &&
                    l_bits.addr.valid          &&
-                   !l_bits.addr_is_virtual    &&
+                   !l_bits.addr_is_uncacheable    &&
                    dword_addr_matches(w)      &&
                    mask_overlap(w)) {
         val searcher_is_older = IsOlder(lcam_ldq_idx(w), i.U, ldq_head)
@@ -1142,7 +1139,7 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
     val s_uop  = stq(i).bits.uop
     val dword_addr_matches = widthMap(w =>
                              ( stq(i).bits.addr.valid      &&
-                              !stq(i).bits.addr_is_virtual &&
+                              !stq(i).bits.addr_is_uncacheable &&
                               (s_addr(corePAddrBits-1,3) === lcam_addr(w)(corePAddrBits-1,3))))
     val write_mask = GenByteMask(s_addr, s_uop.mem_size)
     for (w <- 0 until memWidth) {
@@ -1651,6 +1648,11 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
                     ~(st_brkilled_mask.asUInt) &
                     ~(st_exc_killed_mask.asUInt)
 
+  val dummyWire = Wire(UInt(2.W))
+
+  when (reset.asBool) {
+    val dummy = 0.U
+  }
 
 }
 

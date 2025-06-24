@@ -96,18 +96,16 @@ class BTBBranchPredictorBank(params: BoomBTBParams = BoomBTBParams())(implicit p
       s1_req_rebtb,
       (s1_pc.asSInt + (w << 1).S + entry_btb.offset).asUInt)
     s1_is_br(w)  := !doing_reset && s1_resp(w).valid &&  entry_meta.is_br
-    s1_is_jal(w) := !doing_reset && s1_resp(w).valid && !entry_meta.is_br
+    s1_is_jal(w) := s1_resp(w).valid && !entry_meta.is_br
 
 
     io.resp.f2(w) := io.resp_in(0).f2(w)
     io.resp.f3(w) := io.resp_in(0).f3(w)
-    when (RegNext(s1_hits(w))) {
-      io.resp.f2(w).predicted_pc := RegNext(s1_resp(w))
-      io.resp.f2(w).is_br        := RegNext(s1_is_br(w))
-      io.resp.f2(w).is_jal       := RegNext(s1_is_jal(w))
-      when (RegNext(s1_is_jal(w))) {
-        io.resp.f2(w).taken      := true.B
-      }
+    io.resp.f2(w).predicted_pc := RegNext(s1_resp(w))
+    io.resp.f2(w).is_br        := RegNext(s1_is_br(w))
+    io.resp.f2(w).is_jal       := RegNext(s1_is_jal(w))
+    when (RegNext(s1_is_jal(w))) {
+      io.resp.f2(w).taken      := true.B
     }
     when (RegNext(RegNext(s1_hits(w)))) {
       io.resp.f3(w).predicted_pc := RegNext(io.resp.f2(w).predicted_pc)

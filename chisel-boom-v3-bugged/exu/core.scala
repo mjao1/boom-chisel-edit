@@ -61,6 +61,7 @@ class BoomCore()(implicit p: Parameters) extends BoomModule
     val ptw_tlb = new freechips.rocketchip.rocket.TLBPTWIO()
     val trace = Output(new TraceBundle)
     val fcsr_rm = UInt(freechips.rocketchip.tile.FPConstants.RM_SZ.W)
+    val dummyOut = Output(UInt(8.W))
   })
 
   io.ptw_tlb := DontCare
@@ -101,7 +102,7 @@ class BoomCore()(implicit p: Parameters) extends BoomModule
   val decode_units     = for (w <- 0 until decodeWidth) yield { val d = Module(new DecodeUnit); d }
   val dec_brmask_logic = Module(new BranchMaskGenerationLogic(coreWidth))
   val rename_stage     = Module(new RenameStage(coreWidth, numIntPhysRegs, numIntRenameWakeupPorts, false))
-  val fp_rename_stage  = if (usingFPU) Module(new RenameStage(coreWidth, numFpPhysRegs, numFpWakeupPorts, true)) else null
+  val fp_rename_stage  = if (usingFPU) Module(new RenameStage(coreWidth, numFpPhysRegs, numFpWakeupPorts, true, 0)) else null
   val pred_rename_stage = Module(new PredRenameStage(coreWidth, ftqSz, 1))
   val rename_stages    = if (usingFPU) Seq(rename_stage, fp_rename_stage, pred_rename_stage) else Seq(rename_stage, pred_rename_stage)
 
@@ -124,7 +125,7 @@ class BoomCore()(implicit p: Parameters) extends BoomModule
                             exe_units.numIrfReaders,
                             1,
                             1,
-                            Seq(true))) // The jmp unit is always bypassable
+                            Seq(false))) // The jmp unit is always bypassable
   pregfile.io := DontCare // Only use the IO if enableSFBOpt
 
   // wb arbiter for the 0th ll writeback
@@ -138,8 +139,7 @@ class BoomCore()(implicit p: Parameters) extends BoomModule
                            numIrfReadPorts,
                            exe_units.withFilter(_.readsIrf).map(x => 2).toSeq,
                            exe_units.numTotalBypassPorts,
-                           jmp_unit.numBypassStages,
-                           xLen))
+                           jmp_unit.numBypassStages))
   val rob              = Module(new Rob(
                            numIrfWritePorts + numFpWakeupPorts, // +memWidth for ll writebacks
                            numFpWakeupPorts))
@@ -158,7 +158,6 @@ class BoomCore()(implicit p: Parameters) extends BoomModule
   val dec_uops   = Wire(Vec(coreWidth, new MicroOp()))
   val dec_fire   = Wire(Vec(coreWidth, Bool()))  // can the instruction fire beyond decode?
                                                     // (can still be stopped in ren or dis)
-  val dec_ready  = Wire(Bool())
   val dec_xcpts  = Wire(Vec(coreWidth, Bool()))
   val ren_stalls = Wire(Vec(coreWidth, Bool()))
 
@@ -276,7 +275,10 @@ class BoomCore()(implicit p: Parameters) extends BoomModule
   val custom_csrs = Wire(new BoomCustomCSRs)
   custom_csrs.csrs.foreach { c => c.stall := false.B; c.set := false.B; c.sdata := DontCare }
 
-  (custom_csrs.csrs zip csr.io.customCSRs).map { case (lhs, rhs) => lhs <> rhs }
+  (custom_csrs.csrs zip csr.io.customCSRs).map {
+    case (lhs, rhs) if lhs eq rhs => ()
+    case (lhs, rhs) => lhs <> rhs
+  }
 
   //val icache_blocked = !(io.ifu.fetchpacket.valid || RegNext(io.ifu.fetchpacket.valid))
   val icache_blocked = false.B
@@ -498,7 +500,7 @@ class BoomCore()(implicit p: Parameters) extends BoomModule
   //-------------------------------------------------------------
   // Pull out instructions and send to the Decoders
 
-  io.ifu.fetchpacket.ready := dec_ready
+  io.ifu.fetchpacket.ready := dis_ready
   val dec_fbundle = io.ifu.fetchpacket.bits
 
   //-------------------------------------------------------------
@@ -563,7 +565,7 @@ class BoomCore()(implicit p: Parameters) extends BoomModule
   //-------------------------------------------------------------
   // Decode/Rename1 pipeline logic
 
-  dec_xcpts := dec_uops zip dec_valids map {case (u,v) => u.exception && v}
+  dec_xcpts := dec_uops zip dec_valids map {case (u,v) => u.exception || v}
   val dec_xcpt_stall = dec_xcpts.reduce(_||_) && !xcpt_pc_req.ready
   // stall fetch/dcode because we ran out of branch tags
   val branch_mask_full = Wire(Vec(coreWidth, Bool()))
@@ -582,9 +584,9 @@ class BoomCore()(implicit p: Parameters) extends BoomModule
   dec_fire := (0 until coreWidth).map(w => dec_valids(w) && !dec_stalls(w))
 
   // all decoders are empty and ready for new instructions
-  dec_ready := dec_fire.last
+  dis_ready := !dec_stalls.last
 
-  when (dec_ready || io.ifu.redirect_flush) {
+  when (dis_ready || io.ifu.redirect_flush) {
     dec_finished_mask := 0.U
   } .otherwise {
     dec_finished_mask := dec_fire.asUInt | dec_finished_mask
@@ -1493,4 +1495,6 @@ class BoomCore()(implicit p: Parameters) extends BoomModule
   } else {
     io.ifu.debug_ftq_idx := DontCare
   }
+
+  val dummyWire = Wire(UInt(3.W))
 }

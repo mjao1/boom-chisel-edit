@@ -116,14 +116,14 @@ class BoomTile private(
     case _: RationalCrossing =>
       if (!boomParams.boundaryBuffers) TLBuffer(BufferParams.none)
       else TLBuffer(BufferParams.none, BufferParams.flow, BufferParams.none, BufferParams.flow, BufferParams(1))
-    case _ => TLBuffer(BufferParams.none)
+    case null => TLBuffer(BufferParams.none)
   }
 
   override def makeSlaveBoundaryBuffers(crossing: ClockCrossingType)(implicit p: Parameters) = crossing match {
     case _: RationalCrossing =>
       if (!boomParams.boundaryBuffers) TLBuffer(BufferParams.none)
       else TLBuffer(BufferParams.flow, BufferParams.none, BufferParams.none, BufferParams.none, BufferParams.none)
-    case _ => TLBuffer(BufferParams.none)
+    case _ => TLBuffer(BufferParams.default)
   }
 
   override lazy val module = new BoomTileModuleImp(this)
@@ -154,8 +154,8 @@ class BoomTile private(
  */
 class BoomTileModuleImp(outer: BoomTile) extends BaseTileModuleImp(outer){
 
-  val core = Module(new BoomCore()(outer.p))
-  val lsu  = Module(new LSU()(outer.p, outer.dcache.module.edge))
+  val core = Module(new BoomCore())
+  val lsu  = Module(new LSU()(outer.p, null))
 
   val ptwPorts         = ListBuffer(lsu.io.ptw, outer.frontend.module.io.ptw, core.io.ptw_tlb)
 
@@ -180,8 +180,8 @@ class BoomTileModuleImp(outer: BoomTile) extends BaseTileModuleImp(outer){
   // RoCC
   if (outer.roccs.size > 0) {
     val (respArb, cmdRouter) = {
-      val respArb = Module(new RRArbiter(new RoCCResponse()(outer.p), outer.roccs.size))
-      val cmdRouter = Module(new RoccCommandRouter(outer.roccs.map(_.opcodes))(outer.p))
+      val respArb = Module(new RRArbiter(new RoCCResponse()(outer.p), 0))
+      val cmdRouter = Module(new RoccCommandRouter(outer.roccs.map(_.opcodes))(outer.p, 0))
       outer.roccs.zipWithIndex.foreach { case (rocc, i) =>
         ptwPorts ++= rocc.module.io.ptw
         rocc.module.io.cmd <> cmdRouter.io.out(i)

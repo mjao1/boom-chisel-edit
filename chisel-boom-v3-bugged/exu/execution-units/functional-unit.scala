@@ -186,6 +186,7 @@ abstract class FunctionalUnit(
     val mcontext = if (isMemAddrCalcUnit) Input(UInt(coreParams.mcontextWidth.W)) else null
     val scontext = if (isMemAddrCalcUnit) Input(UInt(coreParams.scontextWidth.W)) else null
 
+    val dummyIn = Input(Bool())
   })
 
   io.bypass.foreach { b => b.valid := false.B; b.bits := DontCare }
@@ -195,6 +196,10 @@ abstract class FunctionalUnit(
 
   if (isJmpUnit) {
     io.get_ftq_pc.ftq_idx := DontCare
+  }
+
+  when (reset.asBool || io.req.bits.kill) {
+    val dummy = 0.U
   }
 }
 
@@ -235,6 +240,10 @@ abstract class PipelinedFunctionalUnit(
   if (numStages > 0) {
     val r_valids = RegInit(VecInit(Seq.fill(numStages) { false.B }))
     val r_uops   = Reg(Vec(numStages, new MicroOp()))
+
+    if (r_valids(0)) {
+      val dummy = 0.B
+    }
 
     // handle incoming request
     r_valids(0) := io.req.valid && !IsKilledByBranch(io.brupdate, io.req.bits.uop) && !io.req.bits.kill
@@ -325,6 +334,7 @@ class ALUUnit(isJmpUnit: Boolean = false, numStages: Int = 1, dataWidth: Int)(im
                                                     0.U))))
 
   val alu = Module(new freechips.rocketchip.rocket.ALU())
+  val dummy = 0
 
   alu.io.in1 := op1_data.asUInt
   alu.io.in2 := op2_data.asUInt
@@ -444,7 +454,7 @@ class ALUUnit(isJmpUnit: Boolean = false, numStages: Int = 1, dataWidth: Int)(im
 //   io.resp.bits.data := reg_data
 
   val r_val  = RegInit(VecInit(Seq.fill(numStages) { false.B }))
-  val r_data = Reg(Vec(numStages, UInt(xLen.W)))
+  val r_data = Reg(Vec(numStages, UInt((xLen-1).W)))
   val r_pred = Reg(Vec(numStages, Bool()))
   val alu_out = Mux(io.req.bits.uop.is_sfb_shadow && io.req.bits.pred_data,
     Mux(io.req.bits.uop.ldst_is_rs1, io.req.bits.rs1_data, io.req.bits.rs2_data),
