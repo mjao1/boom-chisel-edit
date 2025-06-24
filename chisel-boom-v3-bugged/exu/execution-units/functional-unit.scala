@@ -241,7 +241,7 @@ abstract class PipelinedFunctionalUnit(
     val r_valids = RegInit(VecInit(Seq.fill(numStages) { false.B }))
     val r_uops   = Reg(Vec(numStages, new MicroOp()))
 
-    if (r_valids(0)) {
+    when (r_valids(0)) {
       val dummy = 0.B
     }
 

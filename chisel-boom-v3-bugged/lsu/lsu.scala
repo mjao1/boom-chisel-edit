@@ -190,6 +190,9 @@ class STQEntry(implicit p: Parameters) extends BoomBundle()(p)
   val addr                = Valid(UInt(coreMaxAddrBits.W))
   val data                = Valid(UInt(xLen.W))
 
+  // Indicates the store address belongs to an uncached region and must bypass normal cache flow
+  val addr_is_uncacheable = Bool()
+
   val committed           = Bool() // committed by ROB
   val succeeded           = Bool() // D$ has ack'd this, we don't need to maintain this anymore
 

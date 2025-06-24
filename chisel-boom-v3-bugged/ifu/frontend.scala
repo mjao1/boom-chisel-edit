@@ -400,7 +400,7 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
   val s1_ppc  = Mux(s1_is_replay, RegNext(s0_replay_ppc), tlb.io.resp.paddr)
   val s1_bpd_resp = bpd.io.resp.f1
 
-  if (s1_valid) {
+  when (s1_valid) {
     val dummy = 0.B
   }
 
@@ -455,6 +455,9 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
   val s2_is_replay = RegNext(s1_is_replay) && s2_valid
   val s2_xcpt = s2_valid && (s2_tlb_resp.ae.inst || s2_tlb_resp.pf.inst) && !s2_is_replay
   val f3_ready = Wire(Bool())
+
+  // Indicates that F2 should clear its enq to F3 in certain scenarios.
+  val f2_clear = WireInit(false.B)
 
   icache.io.s2_kill := s2_xcpt
 
