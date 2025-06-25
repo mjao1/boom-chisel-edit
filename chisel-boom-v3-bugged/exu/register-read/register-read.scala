@@ -155,6 +155,8 @@ class RegisterRead(
   val bypassed_pred_data = Wire(Vec(issueWidth, Bool()))
   bypassed_pred_data := DontCare
 
+  io.dummyOut := 0.U
+
   for (w <- 0 until issueWidth) {
     val numReadPorts = numReadPortsArray(w)
     var rs1_cases = Array((false.B, 0.U(registerWidth.W)))

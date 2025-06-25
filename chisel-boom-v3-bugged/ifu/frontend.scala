@@ -341,6 +341,8 @@ class BoomFrontendModule(outer: BoomFrontend) extends LazyModuleImp(outer)
   io.cpu.perf.tlbMiss := io.ptw.req.fire
   io.cpu.perf.acquire := icache.io.perf.acquire
 
+  io.cpu.dummyIn := 0.U
+
   // --------------------------------------------------------
   // **** NextPC Select (F0) ****
   //      Send request to ICache

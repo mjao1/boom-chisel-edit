@@ -287,6 +287,8 @@ class ALUExeUnit(
     alu.io.resp.ready := DontCare
     alu.io.brupdate := io.brupdate
 
+    alu.io.dummyIn := false.B
+
     iresp_fu_units += alu
 
     // Bypassing only applies to ALU
@@ -332,6 +334,8 @@ class ALUExeUnit(
     imul.io.req.bits.kill     := io.req.bits.kill
     imul.io.brupdate := io.brupdate
     iresp_fu_units += imul
+
+    imul.io.dummyIn := false.B
   }
 
   var ifpu: IntToFPUnit = null
@@ -342,6 +346,8 @@ class ALUExeUnit(
     ifpu.io.fcsr_rm    := io.fcsr_rm
     ifpu.io.brupdate   <> io.brupdate
     ifpu.io.resp.ready := DontCare
+
+    ifpu.io.dummyIn := false.B
 
     // buffer up results since we share write-port on integer regfile.
     val queue = Module(new BranchKillableQueue(new ExeUnitResp(dataWidth),
@@ -380,6 +386,8 @@ class ALUExeUnit(
                     (io.req.valid && io.req.bits.uop.fu_code_is(FU_DIV))
 
     iresp_fu_units += div
+
+    div.io.dummyIn := false.B
   }
 
   // Mem Unit --------------------------
@@ -394,7 +402,8 @@ class ALUExeUnit(
     maddrcalc.io.mcontext   := io.mcontext
     maddrcalc.io.scontext   := io.scontext
     maddrcalc.io.resp.ready := DontCare
-    require(numBypassStages == 0)
+
+    maddrcalc.io.dummyIn := false.B
 
     io.lsu_io.req := maddrcalc.io.resp
 
@@ -490,6 +499,8 @@ class FPUExeUnit(
     fpu_resp_val             := fpu.io.resp.valid
     fpu_resp_fflags          := fpu.io.resp.bits.fflags
 
+    fpu.io.dummyIn := false.B
+
     fu_units += fpu
   }
 
@@ -516,6 +527,8 @@ class FPUExeUnit(
     fdiv_busy := !fdivsqrt.io.req.ready || (io.req.valid && io.req.bits.uop.fu_code_is(FU_FDV))
 
     fdiv_resp_fflags := fdivsqrt.io.resp.bits.fflags
+
+    fdivsqrt.io.dummyIn := false.B
 
     fu_units += fdivsqrt
   }

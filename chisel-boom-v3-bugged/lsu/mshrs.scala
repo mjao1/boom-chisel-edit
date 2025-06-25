@@ -786,6 +786,8 @@ class BoomMSHRFile(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()
   prefetcher.io.req_addr      := RegNext(Mux1H(commit_vals, commit_addrs))
   prefetcher.io.req_coh       := RegNext(Mux1H(commit_vals, commit_cohs))
 
+  prefetcher.io.dummyIn       := 0.U
+
   when (reset.asBool) {
     val dummy = 0.U
   }

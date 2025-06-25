@@ -1498,4 +1498,12 @@ class BoomCore()(implicit p: Parameters) extends BoomModule
   }
 
   val dummyWire = Wire(UInt(3.W))
+
+  dummyWire := 0.U
+  io.dummyOut := 0.U
+
+  when (reset.asBool) {
+    val dummy = 0.U
+  }
+
 }

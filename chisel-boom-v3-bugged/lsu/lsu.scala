@@ -1651,7 +1651,8 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
                     ~(st_brkilled_mask.asUInt) &
                     ~(st_exc_killed_mask.asUInt)
 
-  val dummyWire = Wire(UInt(2.W))
+  // Initialize unused dummyWire to avoid sink initialization errors
+  val dummyWire = WireInit(0.U(2.W))
 
   when (reset.asBool) {
     val dummy = 0.U

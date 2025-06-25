@@ -56,6 +56,8 @@ class FpPipeline(implicit p: Parameters) extends BoomModule with tile.HasFPUPara
     val dummyOut         = Output(UInt(2.W))
   })
 
+  io.dummyOut := 0.U
+
   //**********************************
   // construct all of the modules
 

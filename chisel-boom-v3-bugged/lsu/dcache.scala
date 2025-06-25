@@ -765,6 +765,8 @@ class BoomNonBlockingDCacheModule(outer: BoomNonBlockingDCache) extends LazyModu
     mshrs.io.req(w).bits.data        := s2_req(w).data
     mshrs.io.req(w).bits.is_hella    := s2_req(w).is_hella
     mshrs.io.req(w).bits.is_probe    := s2_type === t_probe && s2_valid(w)
+
+    mshrs.io.req_is_probe(w)         := s2_type === t_probe && s2_valid(w)
   }
 
   mshrs.io.meta_resp.valid      := !s2_nack_hit(0) || prober.io.mshr_wb_rdy
